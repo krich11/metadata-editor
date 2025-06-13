@@ -1,8 +1,8 @@
 # PNG Metadata Editor - UI Module
 # Date: June 13, 2025
-# Time: 09:15 AM CDT
-# Version: 2.0.5
-# Description: Main UI components and layout for the PNG Metadata Editor with enhanced theme and preview toggle
+# Time: 09:47 AM CDT
+# Version: 2.0.6
+# Description: Main UI components and layout for the PNG Metadata Editor with dynamic row heights and drag-drop
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -80,7 +80,7 @@ class PNGMetadataEditorUI:
         tree_frame.columnconfigure(0, weight=1)
         tree_frame.rowconfigure(0, weight=1)
 
-        # Enhanced treeview with multi-line support
+        # Enhanced treeview with dynamic row heights
         style = ttk.Style()
         style.configure("Custom.Treeview", rowheight=25)
         self.metadata_tree = ttk.Treeview(tree_frame, columns=('Key', 'Value'), show='headings', height=20,
@@ -100,6 +100,8 @@ class PNGMetadataEditorUI:
         h_scrollbar.grid(row=1, column=0, sticky=(tk.W, tk.E))
 
         self.metadata_tree.bind('<Double-1>', self.metadata_handler.edit_metadata_item)
+        self.metadata_tree.bind('<<TreeviewOpen>>', self.adjust_row_heights)
+        self.metadata_tree.bind('<<TreeviewSelect>>', self.adjust_row_heights)
 
         # Drop zone label
         self.drop_label = ttk.Label(metadata_frame,
@@ -129,9 +131,13 @@ class PNGMetadataEditorUI:
         file_menu.add_command(label="Exit", command=self.root.quit)
 
     def setup_drag_drop(self):
-        # Enable drag and drop
+        # Enable drag and drop on main window and metadata frame
         self.root.drop_target_register(tkdnd.DND_FILES)
+        self.main_frame.drop_target_register(tkdnd.DND_FILES)
+        self.drop_label.drop_target_register(tkdnd.DND_FILES)
         self.root.dnd_bind('<<Drop>>', self.metadata_handler.handle_drop)
+        self.main_frame.dnd_bind('<<Drop>>', self.metadata_handler.handle_drop)
+        self.drop_label.dnd_bind('<<Drop>>', self.metadata_handler.handle_drop)
 
     def toggle_theme(self):
         # Toggle between light and dark themes
@@ -150,6 +156,18 @@ class PNGMetadataEditorUI:
         self.root.geometry(f"{new_width}x{self.base_height}")
         if self.image_preview.preview_visible and self.metadata_handler.current_image:
             self.image_preview.update_preview(self.metadata_handler.current_image)
+
+    def adjust_row_heights(self, event=None):
+        # Adjust row heights based on tags
+        for item in self.metadata_tree.get_children():
+            tags = self.metadata_tree.item(item, 'tags')
+            for tag in tags:
+                if tag.startswith('height_'):
+                    try:
+                        height = int(tag.split('_')[1])
+                        self.metadata_tree.item(item, tags=tags, height=height)
+                    except ValueError:
+                        pass
 
     def update_status(self, message):
         # Update status bar message

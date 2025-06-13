@@ -1,7 +1,7 @@
 # PNG Metadata Editor - Metadata Handler
 # Date: June 13, 2025
-# Time: 09:15 AM CDT
-# Version: 2.0.5
+# Time: 09:47 AM CDT
+# Version: 2.0.6
 # Description: Handles metadata loading, editing, and saving for PNG files with dynamic row heights
 
 import tkinter as tk
@@ -26,7 +26,8 @@ class MetadataHandler:
         try:
             files = self.ui.root.tk.splitlist(event.data)
             if files:
-                file_path = files[0]
+                file_path = files[0].strip()
+                print(f"Drop event received: {file_path}")  # Debug log
                 if file_path.lower().endswith('.png'):
                     self.load_png_file(file_path)
                 else:
@@ -34,6 +35,7 @@ class MetadataHandler:
             else:
                 messagebox.showerror("Error", "No file dropped.")
         except Exception as e:
+            print(f"Drag and drop error: {str(e)}")  # Debug log
             messagebox.showerror("Error", f"Drag and drop failed: {str(e)}")
 
     def open_file(self):
@@ -87,6 +89,9 @@ class MetadataHandler:
             item_id = self.ui.metadata_tree.insert('', 'end', values=(key, value))
             self.metadata_entries[item_id] = {'key': key, 'value': value, 'editable': False}
             self.ui.metadata_tree.item(item_id, tags=('basic',))
+            # Calculate row height for key and value
+            row_height = calculate_row_height(self.ui.root, f"{key}\n{value}")
+            self.ui.metadata_tree.item(item_id, tags=('basic', f'height_{row_height}'))
 
         # Add PNG metadata
         if png_info:
@@ -104,8 +109,8 @@ class MetadataHandler:
                 self.metadata_entries[item_id] = {'key': key, 'value': display_value, 'editable': True,
                                                   'full_value': str(value)}
 
-                # Adjust row height
-                row_height = calculate_row_height(self.ui.root, display_value)
+                # Calculate row height for key and value
+                row_height = calculate_row_height(self.ui.root, f"{key}\n{display_value}")
                 self.ui.metadata_tree.item(item_id, tags=(f'height_{row_height}',))
 
         # Show message if no metadata
@@ -114,6 +119,8 @@ class MetadataHandler:
             self.metadata_entries[item_id] = {'key': 'No PNG metadata', 'value': 'found in this file',
                                               'editable': False}
             self.ui.metadata_tree.item(item_id, tags=('basic',))
+            row_height = calculate_row_height(self.ui.root, "No PNG metadata\nfound in this file")
+            self.ui.metadata_tree.item(item_id, tags=('basic', f'height_{row_height}'))
 
     def edit_metadata_item(self, event):
         # Handle double-click to edit metadata
@@ -181,7 +188,7 @@ class MetadataHandler:
                 'full_value': new_value,
                 'editable': True
             }
-            row_height = calculate_row_height(self.ui.root, display_value)
+            row_height = calculate_row_height(self.ui.root, f"{new_key}\n{display_value}")
             self.ui.metadata_tree.item(item_id, tags=(f'height_{row_height}',))
             self.is_modified = True
             self.ui.update_status("Metadata modified")
@@ -235,7 +242,7 @@ class MetadataHandler:
 
             if not key:
                 messagebox.showerror("Error", "Key cannot be empty.")
-            return
+                return
 
             display_value = limit_text_lines(value, max_lines=12)
             item_id = self.ui.metadata_tree.insert('', 'end', values=(key, display_value))
@@ -245,7 +252,7 @@ class MetadataHandler:
                 'full_value': value,
                 'editable': True
             }
-            row_height = calculate_row_height(self.ui.root, display_value)
+            row_height = calculate_row_height(self.ui.root, f"{key}\n{display_value}")
             self.ui.metadata_tree.item(item_id, tags=(f'height_{row_height}',))
             self.is_modified = True
             self.ui.update_status("New metadata field added")
