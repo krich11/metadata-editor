@@ -1,7 +1,7 @@
 # PNG Metadata Editor - Image Preview Module
 # Date: June 13, 2025
-# Time: 08:57 AM CDT
-# Version: 2.0.2
+# Time: 09:07 AM CDT
+# Version: 2.0.4
 # Description: Handles optional image preview functionality with fixed rendering
 
 import tkinter as tk
@@ -17,6 +17,7 @@ class ImagePreview:
         self.preview_frame = None
         self.image_label = None
         self.photo = None
+        self.current_image = None
 
     def toggle_preview(self):
         # Toggle image preview visibility
@@ -24,8 +25,6 @@ class ImagePreview:
             self.hide_preview()
         else:
             self.show_preview()
-            if self.ui.metadata_handler.current_image:
-                self.update_preview(self.ui.metadata_handler.current_image)
 
     def show_preview(self):
         # Create and show image preview pane
@@ -36,10 +35,12 @@ class ImagePreview:
         self.ui.main_paned.add(self.preview_frame, weight=1)
 
         ttk.Label(self.preview_frame, text="Image Preview").pack(anchor=tk.N)
-        self.image_label = ttk.Label(self.preview_frame, background=THEME[self.ui.theme]["bg"])
+        self.image_label = ttk.Label(self.preview_frame, background=THEME[self.ui.theme]["bg"], compound='center')
         self.image_label.pack(fill=tk.BOTH, expand=True)
 
         self.preview_visible = True
+        if self.current_image:
+            self.update_preview(self.current_image)
 
     def hide_preview(self):
         # Hide image preview pane
@@ -55,6 +56,7 @@ class ImagePreview:
 
     def update_preview(self, image):
         # Update preview with new image
+        self.current_image = image
         if not self.preview_visible or not image or not self.image_label:
             return
 
@@ -65,6 +67,7 @@ class ImagePreview:
             img.thumbnail(max_size, Image.Resampling.LANCZOS)
             self.photo = ImageTk.PhotoImage(img)
             self.image_label.configure(image=self.photo, text="")
+            self.image_label.image = self.photo  # Keep reference to prevent garbage collection
 
         except Exception as e:
             self.image_label.configure(image=None, text=f"Preview error: {str(e)}")

@@ -1,8 +1,8 @@
 # PNG Metadata Editor - UI Module
 # Date: June 13, 2025
-# Time: 08:57 AM CDT
-# Version: 2.0.2
-# Description: Main UI components and layout for the PNG Metadata Editor with enhanced theme support
+# Time: 09:07 AM CDT
+# Version: 2.0.4
+# Description: Main UI components and layout for the PNG Metadata Editor with enhanced theme and preview toggle
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -17,7 +17,9 @@ class PNGMetadataEditorUI:
     def __init__(self, root):
         self.root = root
         self.root.title("PNG Metadata Editor")
-        self.root.geometry("1000x700")
+        self.base_width = 1000
+        self.base_height = 700
+        self.root.geometry(f"{self.base_width}x{self.base_height}")
         self.root.minsize(800, 500)
         self.theme = "dark"  # Default theme
         self.metadata_handler = MetadataHandler(self)
@@ -57,7 +59,8 @@ class PNGMetadataEditorUI:
             ("Save", self.metadata_handler.save_file),
             ("Save As", self.metadata_handler.save_as_file),
             ("Add Field", self.metadata_handler.add_metadata_field),
-            ("Remove Field", self.metadata_handler.remove_metadata_field)
+            ("Remove Field", self.metadata_handler.remove_metadata_field),
+            ("Toggle Preview", self.toggle_preview)
         ]
         for text, command in buttons:
             ttk.Button(button_frame, text=text, command=command).pack(side=tk.LEFT, padx=(0, 5))
@@ -116,11 +119,6 @@ class PNGMetadataEditorUI:
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
 
-        # View menu
-        view_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="View", menu=view_menu)
-        view_menu.add_command(label="Toggle Image Preview", command=self.image_preview.toggle_preview)
-
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
@@ -144,6 +142,14 @@ class PNGMetadataEditorUI:
         self.image_preview.update_theme(self.theme)
         self.theme_button.configure(text=f"Toggle {'Dark' if self.theme == 'light' else 'Light'} Mode")
         self.metadata_handler.update_dialog_theme(self.theme)
+
+    def toggle_preview(self):
+        # Toggle image preview and resize window
+        self.image_preview.toggle_preview()
+        new_width = self.base_width + (400 if self.image_preview.preview_visible else 0)
+        self.root.geometry(f"{new_width}x{self.base_height}")
+        if self.image_preview.preview_visible and self.metadata_handler.current_image:
+            self.image_preview.update_preview(self.metadata_handler.current_image)
 
     def update_status(self, message):
         # Update status bar message
