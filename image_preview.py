@@ -1,8 +1,8 @@
 # PNG Metadata Editor - Image Preview Module
 # Date: June 13, 2025
-# Time: 08:45 AM CDT
-# Version: 2.0.0
-# Description: Handles optional image preview functionality
+# Time: 08:57 AM CDT
+# Version: 2.0.2
+# Description: Handles optional image preview functionality with fixed rendering
 
 import tkinter as tk
 from tkinter import ttk
@@ -24,6 +24,8 @@ class ImagePreview:
             self.hide_preview()
         else:
             self.show_preview()
+            if self.ui.metadata_handler.current_image:
+                self.update_preview(self.ui.metadata_handler.current_image)
 
     def show_preview(self):
         # Create and show image preview pane
@@ -38,8 +40,6 @@ class ImagePreview:
         self.image_label.pack(fill=tk.BOTH, expand=True)
 
         self.preview_visible = True
-        if self.ui.metadata_handler.current_image:
-            self.update_preview(self.ui.metadata_handler.current_image)
 
     def hide_preview(self):
         # Hide image preview pane
@@ -55,7 +55,7 @@ class ImagePreview:
 
     def update_preview(self, image):
         # Update preview with new image
-        if not self.preview_visible or not image:
+        if not self.preview_visible or not image or not self.image_label:
             return
 
         try:
@@ -64,10 +64,10 @@ class ImagePreview:
             img = image.copy()
             img.thumbnail(max_size, Image.Resampling.LANCZOS)
             self.photo = ImageTk.PhotoImage(img)
-            self.image_label.configure(image=self.photo)
+            self.image_label.configure(image=self.photo, text="")
 
         except Exception as e:
-            self.image_label.configure(text=f"Preview error: {str(e)}")
+            self.image_label.configure(image=None, text=f"Preview error: {str(e)}")
 
     def update_theme(self, theme):
         # Update preview background for theme change

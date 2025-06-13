@@ -1,15 +1,15 @@
 # PNG Metadata Editor - Metadata Handler
 # Date: June 13, 2025
-# Time: 08:45 AM CDT
-# Version: 2.0.0
-# Description: Handles metadata loading, editing, and saving for PNG files
+# Time: 08:57 AM CDT
+# Version: 2.0.2
+# Description: Handles metadata loading, editing, and saving for PNG files with dynamic row heights
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 from PIL import Image, PngImagePlugin
 import os
 import json
-from utils import limit_text_lines
+from utils import limit_text_lines, calculate_row_height, THEME
 
 
 class MetadataHandler:
@@ -19,6 +19,7 @@ class MetadataHandler:
         self.current_image = None
         self.metadata_entries = {}
         self.is_modified = False
+        self.dialogs = []  # Track open dialogs for theme updates
 
     def handle_drop(self, event):
         # Handle dropped files
@@ -80,6 +81,7 @@ class MetadataHandler:
         for key, value in basic_info.items():
             item_id = self.ui.metadata_tree.insert('', 'end', values=(key, value))
             self.metadata_entries[item_id] = {'key': key, 'value': value, 'editable': False}
+            self.ui.metadata_tree.item(item_id, tags=('basic',))
 
         # Add PNG metadata
         if png_info:
@@ -94,13 +96,19 @@ class MetadataHandler:
                 # Limit display to 12 lines
                 display_value = limit_text_lines(display_value, max_lines=12)
                 item_id = self.ui.metadata_tree.insert('', 'end', values=(key, display_value))
-                self.metadata_entries[item_id] = {'key': key, 'value': display_value, 'editable': True}
+                self.metadata_entries[item_id] = {'key': key, 'value': display_value, 'editable': True,
+                                                  'full_value': str(value)}
+
+                # Adjust row height
+                row_height = calculate_row_height(self.ui.root, display_value)
+                self.ui.metadata_tree.item(item_id, tags=(f'height_{row_height}',))
 
         # Show message if no metadata
         if not png_info:
             item_id = self.ui.metadata_tree.insert('', 'end', values=('No PNG metadata', 'found in this file'))
             self.metadata_entries[item_id] = {'key': 'No PNG metadata', 'value': 'found in this file',
                                               'editable': False}
+            self.ui.metadata_tree.item(item_id, tags=('basic',))
 
     def edit_metadata_item(self, event):
         # Handle double-click to edit metadata
@@ -126,6 +134,7 @@ class MetadataHandler:
         dialog.geometry("600x500")
         dialog.transient(self.ui.root)
         dialog.grab_set()
+        self.dialogs.append(dialog)
 
         # Center dialog
         x = self.ui.root.winfo_rootx() + 50
@@ -145,7 +154,7 @@ class MetadataHandler:
         ttk.Label(main_frame, text="Value:").pack(anchor=tk.W)
         value_text = scrolledtext.ScrolledText(main_frame, height=20, width=60)
         value_text.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-        value_text.insert('1.0', entry_data['value'])
+        value_text.insert('1.0', entry_data.get('full_value', entry_data['value']))
 
         # Buttons
         button_frame = ttk.Frame(main_frame)
@@ -161,15 +170,29 @@ class MetadataHandler:
 
             display_value = limit_text_lines(new_value, max_lines=12)
             self.ui.metadata_tree.item(item_id, values=(new_key, display_value))
-            self.metadata_entries[item_id] = {'key': new_key, 'value': new_value, 'editable': True}
+            self.metadata_entries[item_id] = {
+                'key': new_key,
+                'value': display_value,
+                'full_value': new_value,
+                'editable': True
+            }
             self.is_modified = True
             self.ui.update_status("Metadata modified")
+            self.dialogs.remove(dialog)
+            dialog.destroy()
+
+        def on_close():
+            self.dialogs.remove(dialog)
             dialog.destroy()
 
         ttk.Button(button_frame, text="Save", command=save_changes).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.RIGHT)
+        ttk.Button(button_frame, text="Cancel", command=on_close).pack(side=tk.RIGHT)
 
+        dialog.protocol("WM_DELETE_WINDOW", on_close)
         value_text.focus_set()
+
+        # Apply theme
+        self.apply_dialog_theme(dialog)
 
     def add_metadata_field(self):
         # Add new metadata field
@@ -179,9 +202,10 @@ class MetadataHandler:
 
         dialog = tk.Toplevel(self.ui.root)
         dialog.title("Add Metadata Field")
-        dialog.geometry("400x250")
+        dialog.geometry("400x300")
         dialog.transient(self.ui.root)
         dialog.grab_set()
+        self.dialogs.append(dialog)
 
         main_frame = ttk.Frame(dialog, padding=10)
         main_frame.pack(fill=tk.BOTH, expand=True)
@@ -192,7 +216,7 @@ class MetadataHandler:
         key_entry.pack(fill=tk.X, pady=(0, 10))
 
         ttk.Label(main_frame, text="Value:").pack(anchor=tk.W)
-        value_text = scrolledtext.ScrolledText(main_frame, height=5, width=40)
+        value_text = scrolledtext.ScrolledText(main_frame, height=10, width=50)
         value_text.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
         button_frame = ttk.Frame(main_frame)
@@ -204,19 +228,36 @@ class MetadataHandler:
 
             if not key:
                 messagebox.showerror("Error", "Key cannot be empty.")
-            return
+                return
 
             display_value = limit_text_lines(value, max_lines=12)
             item_id = self.ui.metadata_tree.insert('', 'end', values=(key, display_value))
-            self.metadata_entries[item_id] = {'key': key, 'value': value, 'editable': True}
+            self.metadata_entries[item_id] = {
+                'key': key,
+                'value': display_value,
+                'full_value': value,
+                'editable': True
+            }
+            row_height = calculate_row_height(self.ui.root, display_value)
+            self.ui.metadata_tree.item(item_id, tags=(f'height_{row_height}',))
             self.is_modified = True
             self.ui.update_status("New metadata field added")
+            self.dialogs.remove(dialog)
             dialog.destroy()
 
-        ttk.Button(button_frame, text="Add", command=add_field).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.RIGHT)
+        def on_close():
+            self.dialogs.remove(dialog)
+            self.is_modified = True
+            dialog.destroy()
 
+        ttk.Button(button_frame, text="Add", command=add_field).pack(side=tk.RIGHT, padx=(0, 10))
+        ttk.Button(button_frame, text="Cancel", command=on_close).pack(side=tk.RIGHT)
+
+        dialog.protocol("WM_DELETE_WINDOW", on_close)
         key_entry.focus_set()
+
+        # Apply theme
+        self.apply_dialog_theme(dialog)
 
     def remove_metadata_field(self):
         # Remove selected metadata field
@@ -228,19 +269,20 @@ class MetadataHandler:
         item_id = selection[0]
         entry_data = self.metadata_entries.get(item_id, {})
 
+
         if not entry_data.get('editable', True):
-            messagebox.showinfo("Info", "Cannot remove basic image information fields.")
-            return
+            messagebox.showwarning("Error", "Cannot remove basic image information fields.")
+        return
 
         key = entry_data.get('key', 'Unknown')
-        if messagebox.askyesno("Confirm", f"Remove metadata field '{key}'?"):
+        if messagebox.askyesno("Confirm", f"Are you sure you want to remove metadata field '{key}'?"):
             self.ui.metadata_tree.delete(item_id)
             del self.metadata_entries[item_id]
             self.is_modified = True
             self.ui.update_status("Metadata field removed")
 
     def save_file(self):
-        # Save metadata to current file
+        # Save metadata to specified file
         if not self.current_file:
             messagebox.showwarning("Warning", "No file loaded.")
             return
@@ -248,7 +290,7 @@ class MetadataHandler:
         self.save_metadata_to_file(self.current_file)
 
     def save_as_file(self):
-        # Save metadata to new file
+        # Save metadata as to specified new file
         if not self.current_image:
             messagebox.showwarning("Warning", "No file loaded.")
             return
@@ -256,8 +298,7 @@ class MetadataHandler:
         file_path = filedialog.asksaveasfilename(
             title="Save PNG File As",
             defaultextension=".png",
-            filetypes=[("PNG files", "*.png"), ("All files", "*.*")]
-        )
+            filetypes=[("PNG files", "*.png"), ("All files", "*.*")])
 
         if file_path:
             self.save_metadata_to_file(file_path)
@@ -268,9 +309,9 @@ class MetadataHandler:
             png_info = PngImagePlugin.PngInfo()
 
             for item_id, entry_data in self.metadata_entries.items():
-                if entry_data['editable'] and entry_data['key'] and entry_data['value']:
+                if entry_data['editable'] and entry_data['key'] and entry_data.get('full_value', entry_data['value']):
                     if entry_data['key'] not in ['Image Width', 'Image Height', 'Image Mode', 'Image Format']:
-                        png_info.add_text(entry_data['key'], entry_data['value'])
+                        png_info.add_text(entry_data['key'], entry_data.get('full_value', entry_data['value']))
 
             self.current_image.save(file_path, "PNG", pnginfo=png_info)
 
@@ -278,7 +319,37 @@ class MetadataHandler:
                 self.is_modified = False
 
             self.ui.update_status(f"Saved: {os.path.basename(file_path)}")
-            messagebox.showinfo("Success", f"File saved successfully:\n{os.path.basename(file_path)}")
+            messagebox.showinfo("Success", f"File saved successfully: {os.path.basename(file_path)}")
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save file:\n{str(e)}")
+
+    def apply_dialog_theme(self, dialog):
+        # Apply theme to dialog widgets
+        dialog.configure(bg=THEME[self.ui.theme]["bg"])
+        style = ttk.Style()
+        style.configure("Dialog.TLabel", background=THEME[self.ui.theme]["bg"], foreground=THEME[self.ui.theme]["fg"])
+        style.configure("Dialog.TButton", background=THEME[self.ui.theme]["highlight"],
+                        foreground=THEME[self.ui.theme]["fg"])
+        style.configure("Dialog.TEntry", fieldbackground=THEME[self.ui.theme]["highlight"],
+                        foreground=THEME[self.ui.theme]["fg"])
+        for widget in dialog.winfo_children():
+            if isinstance(widget, ttk.Frame):
+                widget.configure(style="TFrame")
+                for child in widget.winfo_children():
+                    if isinstance(child, ttk.Label):
+                        child.configure(style="Dialog.TLabel")
+                    elif isinstance(child, ttk.Button):
+                        child.configure(style="Dialog.TButton")
+                    elif isinstance(child, ttk.Entry):
+                        child.configure(style="Dialog.TEntry")
+                    elif isinstance(child, scrolledtext.ScrolledText):
+                        child.configure(bg=THEME[self.ui.theme]["highlight"], fg=THEME[self.ui.theme]["fg"])
+
+    def update_dialog_theme(self, theme):
+        # Update theme for all open dialogs
+        for dialog in self.dialogs[:]:
+            if dialog.winfo_exists():
+                self.apply_dialog_theme(dialog)
+            else:
+                self.dialogs.remove(dialog)

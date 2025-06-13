@@ -1,8 +1,8 @@
 # PNG Metadata Editor - UI Module
 # Date: June 13, 2025
-# Time: 08:45 AM CDT
-# Version: 2.0.0
-# Description: Main UI components and layout for the PNG Metadata Editor
+# Time: 08:57 AM CDT
+# Version: 2.0.2
+# Description: Main UI components and layout for the PNG Metadata Editor with enhanced theme support
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -62,6 +62,10 @@ class PNGMetadataEditorUI:
         for text, command in buttons:
             ttk.Button(button_frame, text=text, command=command).pack(side=tk.LEFT, padx=(0, 5))
 
+        # Theme toggle button
+        self.theme_button = ttk.Button(button_frame, text="Toggle Light Mode", command=self.toggle_theme)
+        self.theme_button.pack(side=tk.LEFT, padx=(10, 5))
+
         # Metadata table
         metadata_frame = ttk.LabelFrame(self.main_frame, text="Metadata", padding=5)
         metadata_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -116,9 +120,6 @@ class PNGMetadataEditorUI:
         view_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="View", menu=view_menu)
         view_menu.add_command(label="Toggle Image Preview", command=self.image_preview.toggle_preview)
-        view_menu.add_separator()
-        view_menu.add_command(label="Light Theme", command=lambda: self.switch_theme("light"))
-        view_menu.add_command(label="Dark Theme", command=lambda: self.switch_theme("dark"))
 
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
@@ -134,13 +135,15 @@ class PNGMetadataEditorUI:
         self.root.drop_target_register(tkdnd.DND_FILES)
         self.root.dnd_bind('<<Drop>>', self.metadata_handler.handle_drop)
 
-    def switch_theme(self, theme):
-        # Switch between light and dark themes
-        self.theme = theme
-        apply_theme(self.root, theme)
-        self.file_label.configure(foreground=THEME[theme]["fg_muted"])
-        self.drop_label.configure(foreground=THEME[theme]["fg_muted"])
-        self.image_preview.update_theme(theme)
+    def toggle_theme(self):
+        # Toggle between light and dark themes
+        self.theme = "light" if self.theme == "dark" else "dark"
+        apply_theme(self.root, self.theme)
+        self.file_label.configure(foreground=THEME[self.theme]["fg_muted"])
+        self.drop_label.configure(foreground=THEME[self.theme]["fg_muted"])
+        self.image_preview.update_theme(self.theme)
+        self.theme_button.configure(text=f"Toggle {'Dark' if self.theme == 'light' else 'Light'} Mode")
+        self.metadata_handler.update_dialog_theme(self.theme)
 
     def update_status(self, message):
         # Update status bar message
