@@ -1,15 +1,21 @@
-# PNG Metadata Editor - Metadata Handler
+# PNG Metadata Editor - Metadata Handler (PyQt5)
 # Date: June 13, 2025
-# Time: 09:51 AM CDT
+# Time: 09:51 AM CDT (Updated for PyQt5)
 # Version: 2.0.7
-# Description: Handles metadata loading, editing, and saving for PNG files with dynamic row heights
+# Description: Handles metadata loading, editing, and saving for PNG files with dynamic row heights using PyQt5
 
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext
+from PyQt5.QtWidgets import (
+    QFileDialog, QMessageBox, QDialog, QVBoxLayout, QHBoxLayout,
+    QLabel, QLineEdit, QTextEdit, QPushButton, QFrame, QApplication,
+    QTreeWidget, QTreeWidgetItem,
+    QWidget
+)
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QFontMetrics, QIcon
 from PIL import Image, PngImagePlugin
 import os
 import json
-from utils import limit_text_lines, calculate_row_height, THEME
+from utils import limit_text_lines, get_theme_colors # Assuming get_theme_colors is added to utils for PyQt5 styling
 
 
 class MetadataHandler:
@@ -17,34 +23,25 @@ class MetadataHandler:
         self.ui = ui
         self.current_file = None
         self.current_image = None
-        self.metadata_entries = {}
+        self.metadata_entries = {} # Stores metadata as dicts with key, value, editable, full_value, etc.
+        self.qt_item_map = {} # Maps unique internal item IDs to QTreeWidgetItem objects
         self.is_modified = False
         self.dialogs = []  # Track open dialogs for theme updates
 
-    def handle_drop(self, event):
-        # Handle dropped files
-        try:
-            print("Drop event triggered")  # Debug log
-            files = self.ui.root.tk.splitlist(event.data)
-            print(f"Files received: {files}")  # Debug log
-            if files:
-                file_path = files[0].strip()
-                print(f"Processing file: {file_path}")  # Debug log
-                if file_path.lower().endswith('.png'):
-                    self.load_png_file(file_path)
-                else:
-                    messagebox.showerror("Error", "Please drop a PNG file.")
+    def handle_drop(self, file_path):
+        # Handle dropped files (file_path is already processed by UI)
+        if file_path:
+            if file_path.lower().endswith('.png'):
+                self.load_png_file(file_path)
             else:
-                messagebox.showerror("Error", "No file dropped.")
-        except Exception as e:
-            print(f"Drag and drop error: {str(e)}")  # Debug log
-            messagebox.showerror("Error", f"Drag and drop failed: {str(e)}")
+                QMessageBox.showerror(self.ui, "Error", "Please drop a PNG file.")
+        else:
+            QMessageBox.showerror(self.ui, "Error", "No file dropped.")
 
     def open_file(self):
         # Open file dialog for PNG selection
-        file_path = filedialog.askopenfilename(
-            title="Select PNG File",
-            filetypes=[("PNG files", "*.png"), ("All files", "*.*")]
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.ui, "Select PNG File", "", "PNG files (*.png);;All files (*.*)"
         )
         if file_path:
             self.load_png_file(file_path)
@@ -54,25 +51,27 @@ class MetadataHandler:
         try:
             self.current_file = file_path
             self.current_image = Image.open(file_path)
+            self.current_image.load() # Load image data to close file handle after loading
 
             # Update UI
-            self.ui.file_label.config(text=os.path.basename(file_path))
-            self.ui.drop_label.place_forget()
+            self.ui.file_label.setText(os.path.basename(file_path))
+            self.ui.drop_label.hide() # Hide the drop zone label
             self.ui.image_preview.update_preview(self.current_image)
 
-            # Clear existing metadata
-            for item in self.ui.metadata_tree.get_children():
-                self.ui.metadata_tree.delete(item)
+            # Clear existing metadata in QTreeWidget
+            self.ui.metadata_tree.clear()
             self.metadata_entries.clear()
+            self.qt_item_map.clear()
 
             # Load metadata
             self.load_metadata()
             self.is_modified = False
             self.ui.update_status(f"Loaded: {os.path.basename(file_path)}")
-            self.ui.adjust_row_heights()  # Refresh row heights
+            # No direct adjust_row_heights needed as QTreeWidget handles it better.
+            # If dynamic heights are *critical* based on content, a custom delegate would be implemented.
 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load PNG file:\n{str(e)}")
+            QMessageBox.critical(self.ui, "Error", f"Failed to load PNG file:\n{str(e)}")
 
     def load_metadata(self):
         # Extract and display PNG metadata
@@ -89,15 +88,16 @@ class MetadataHandler:
 
         # Add basic info
         for key, value in basic_info.items():
-            item_id = self.ui.metadata_tree.insert('', 'end', values=(key, value))
-            row_height = calculate_row_height(self.ui.root, f"{key}\n{value}")
+            item = QTreeWidgetItem(self.ui.metadata_tree, [key, value])
+            item.setFlags(item.flags() & ~Qt.ItemIsEditable) # Make non-editable
+            item_id = id(item) # Use unique ID for internal mapping
             self.metadata_entries[item_id] = {
                 'key': key,
                 'value': value,
                 'editable': False,
-                'row_height': row_height
+                'full_value': value # Full value is same as display value for basic info
             }
-            self.ui.metadata_tree.item(item_id, tags=('basic',))
+            self.qt_item_map[item_id] = item
 
         # Add PNG metadata
         if png_info:
@@ -110,212 +110,230 @@ class MetadataHandler:
                     display_value = str(value)
 
                 # Limit display to 12 lines
-                display_value = limit_text_lines(display_value, max_lines=12)
-                item_id = self.ui.metadata_tree.insert('', 'end', values=(key, display_value))
-                row_height = calculate_row_height(self.ui.root, f"{key}\n{display_value}")
+                display_value_limited = limit_text_lines(display_value, max_lines=12)
+                item = QTreeWidgetItem(self.ui.metadata_tree, [key, display_value_limited])
+                item.setFlags(item.flags() | Qt.ItemIsEditable) # Make editable
+                item_id = id(item)
                 self.metadata_entries[item_id] = {
                     'key': key,
-                    'value': display_value,
+                    'value': display_value_limited,
                     'editable': True,
-                    'full_value': str(value),
-                    'row_height': row_height
+                    'full_value': str(value) # Store original full value
                 }
-                self.ui.metadata_tree.item(item_id, tags=('row',))
+                self.qt_item_map[item_id] = item
 
         # Show message if no metadata
-        if not png_info:
-            item_id = self.ui.metadata_tree.insert('', 'end', values=('No PNG metadata', 'found in this file'))
-            row_height = calculate_row_height(self.ui.root, "No PNG metadata\nfound in this file")
+        if not png_info and not basic_info: # Only if no basic info either
+            item = QTreeWidgetItem(self.ui.metadata_tree, ['No PNG metadata', 'found in this file'])
+            item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+            item_id = id(item)
             self.metadata_entries[item_id] = {
                 'key': 'No PNG metadata',
                 'value': 'found in this file',
                 'editable': False,
-                'row_height': row_height
+                'full_value': 'found in this file'
             }
-            self.ui.metadata_tree.item(item_id, tags=('basic',))
+            self.qt_item_map[item_id] = item
 
-        self.ui.adjust_row_heights()  # Apply heights after loading
+        self.ui.metadata_tree.expandAll() # Expand all items to show content
 
-    def edit_metadata_item(self, event):
+    def edit_metadata_item(self, item, column):
         # Handle double-click to edit metadata
-        selection = self.ui.metadata_tree.selection()
-        if not selection:
+        # 'item' is a QTreeWidgetItem, 'column' is the index of the clicked column
+        if not item:
             return
 
-        item_id = selection[0]
-        if item_id not in self.metadata_entries:
+        # Find the internal ID for this QTreeWidgetItem
+        item_id = None
+        for iid, qitem in self.qt_item_map.items():
+            if qitem == item:
+                item_id = iid
+                break
+
+        if item_id is None or item_id not in self.metadata_entries:
             return
 
         entry_data = self.metadata_entries[item_id]
         if not entry_data['editable']:
-            messagebox.showinfo("Info", "This field is not editable (basic image information).")
+            QMessageBox.information(self.ui, "Info", "This field is not editable (basic image information).")
             return
 
         self.create_edit_dialog(item_id, entry_data)
 
     def create_edit_dialog(self, item_id, entry_data):
         # Create dialog for metadata editing
-        dialog = tk.Toplevel(self.ui.root)
-        dialog.title("Edit Metadata")
-        dialog.geometry("600x500")
-        dialog.transient(self.ui.root)
-        dialog.grab_set()
-        self.dialogs.append(dialog)
+        dialog = QDialog(self.ui)
+        dialog.setWindowTitle("Edit Metadata")
+        dialog.setFixedSize(600, 500) # Fixed size for dialog
+        dialog.setWindowModality(Qt.ApplicationModal) # Makes it modal
 
-        # Center dialog
-        x = self.ui.root.winfo_rootx() + 50
-        y = self.ui.root.winfo_rooty() + 50
-        dialog.geometry(f"+{x}+{y}")
-
-        main_frame = ttk.Frame(dialog, padding=10)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        main_layout = QVBoxLayout(dialog)
 
         # Key field
-        ttk.Label(main_frame, text="Key:").pack(anchor=tk.W)
-        key_var = tk.StringVar(value=entry_data['key'])
-        key_entry = ttk.Entry(main_frame, textvariable=key_var, width=60)
-        key_entry.pack(fill=tk.X, pady=(0, 10))
+        main_layout.addWidget(QLabel("Key:"))
+        key_edit = QLineEdit(entry_data['key'])
+        main_layout.addWidget(key_edit)
 
         # Value field
-        ttk.Label(main_frame, text="Value:").pack(anchor=tk.W)
-        value_text = scrolledtext.ScrolledText(main_frame, height=20, width=60)
-        value_text.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-        value_text.insert('1.0', entry_data.get('full_value', entry_data['value']))
+        main_layout.addWidget(QLabel("Value:"))
+        value_text = QTextEdit()
+        value_text.setText(entry_data.get('full_value', entry_data['value']))
+        main_layout.addWidget(value_text)
 
         # Buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X)
+        button_layout = QHBoxLayout()
+        main_layout.addLayout(button_layout)
 
-        def save_changes():
-            new_key = key_var.get().strip()
-            new_value = value_text.get('1.0', tk.END).strip()
+        save_button = QPushButton("Save")
+        save_button.clicked.connect(lambda: self.save_edit_dialog_changes(dialog, item_id, key_edit, value_text))
+        button_layout.addWidget(save_button)
 
-            if not new_key:
-                messagebox.showerror("Error", "Key cannot be empty.")
-                return
+        cancel_button = QPushButton("Cancel")
+        cancel_button.clicked.connect(dialog.reject) # Reject closes the dialog
+        button_layout.addWidget(cancel_button)
 
-            display_value = limit_text_lines(new_value, max_lines=12)
-            row_height = calculate_row_height(self.ui.root, f"{new_key}\n{display_value}")
-            self.ui.metadata_tree.item(item_id, values=(new_key, display_value))
-            self.metadata_entries[item_id] = {
-                'key': new_key,
-                'value': display_value,
-                'full_value': new_value,
-                'editable': True,
-                'row_height': row_height
-            }
-            self.ui.metadata_tree.item(item_id, tags=('row',))
-            self.is_modified = True
-            self.ui.update_status("Metadata modified")
-            self.ui.adjust_row_heights()
+        self.dialogs.append(dialog)
+        self.apply_dialog_theme(dialog) # Apply theme to the dialog
+        dialog.exec_() # Show dialog modally
+
+        if dialog in self.dialogs: # Clean up if still in list
             self.dialogs.remove(dialog)
-            dialog.destroy()
 
-        def on_close():
-            self.dialogs.remove(dialog)
-            dialog.destroy()
+    def save_edit_dialog_changes(self, dialog, item_id, key_edit, value_text):
+        new_key = key_edit.text().strip()
+        new_value = value_text.toPlainText().strip()
 
-        ttk.Button(button_frame, text="Save", command=save_changes).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(button_frame, text="Cancel", command=on_close).pack(side=tk.RIGHT)
+        if not new_key:
+            QMessageBox.critical(dialog, "Error", "Key cannot be empty.")
+            return
 
-        dialog.protocol("WM_DELETE_WINDOW", on_close)
-        value_text.focus_set()
+        display_value = limit_text_lines(new_value, max_lines=12)
 
-        # Apply theme
-        self.apply_dialog_theme(dialog)
+        # Update the internal data structure
+        self.metadata_entries[item_id]['key'] = new_key
+        self.metadata_entries[item_id]['value'] = display_value
+        self.metadata_entries[item_id]['full_value'] = new_value
+
+        # Update the QTreeWidgetItem in the QTreeWidget
+        item = self.qt_item_map[item_id]
+        item.setText(0, new_key)
+        item.setText(1, display_value)
+
+        self.is_modified = True
+        self.ui.update_status("Metadata modified")
+        dialog.accept() # Accept closes the dialog
 
     def add_metadata_field(self):
         # Add new metadata field
         if not self.current_image:
-            messagebox.showwarning("Warning", "Please load a PNG file first.")
+            QMessageBox.warning(self.ui, "Warning", "Please load a PNG file first.")
             return
 
-        dialog = tk.Toplevel(self.ui.root)
-        dialog.title("Add Metadata Field")
-        dialog.geometry("400x300")
-        dialog.transient(self.ui.root)
-        dialog.grab_set()
+        dialog = QDialog(self.ui)
+        dialog.setWindowTitle("Add Metadata Field")
+        dialog.setFixedSize(400, 300)
+        dialog.setWindowModality(Qt.ApplicationModal)
+
+        main_layout = QVBoxLayout(dialog)
+
+        main_layout.addWidget(QLabel("Key:"))
+        key_edit = QLineEdit()
+        main_layout.addWidget(key_edit)
+
+        main_layout.addWidget(QLabel("Value:"))
+        value_text = QTextEdit()
+        main_layout.addWidget(value_text)
+
+        button_layout = QHBoxLayout()
+        main_layout.addLayout(button_layout)
+
+        add_button = QPushButton("Add")
+        add_button.clicked.connect(lambda: self.add_field_dialog_changes(dialog, key_edit, value_text))
+        button_layout.addWidget(add_button)
+
+        cancel_button = QPushButton("Cancel")
+        cancel_button.clicked.connect(dialog.reject)
+        button_layout.addWidget(cancel_button)
+
         self.dialogs.append(dialog)
-
-        main_frame = ttk.Frame(dialog, padding=10)
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        ttk.Label(main_frame, text="Key:").pack(anchor=tk.W)
-        key_var = tk.StringVar()
-        key_entry = ttk.Entry(main_frame, textvariable=key_var, width=40)
-        key_entry.pack(fill=tk.X, pady=(0, 10))
-
-        ttk.Label(main_frame, text="Value:").pack(anchor=tk.W)
-        value_text = scrolledtext.ScrolledText(main_frame, height=10, width=50)
-        value_text.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X)
-
-        def add_field():
-            key = key_var.get().strip()
-            value = value_text.get('1.0', tk.END).strip()
-
-            if not key:
-                messagebox.showerror("Error", "Key cannot be empty.")
-                return
-
-            display_value = limit_text_lines(value, max_lines=12)
-            row_height = calculate_row_height(self.ui.root, f"{key}\n{display_value}")
-            item_id = self.ui.metadata_tree.insert('', 'end', values=(key, display_value))
-            self.metadata_entries[item_id] = {
-                'key': key,
-                'value': display_value,
-                'full_value': value,
-                'editable': True,
-                'row_height': row_height
-            }
-            self.ui.metadata_tree.item(item_id, tags=('row',))
-            self.is_modified = True
-            self.ui.update_status("New metadata field added")
-            self.ui.adjust_row_heights()
-            self.dialogs.remove(dialog)
-            dialog.destroy()
-
-        def on_close():
-            self.dialogs.remove(dialog)
-            dialog.destroy()
-
-        ttk.Button(button_frame, text="Add", command=add_field).pack(side=tk.RIGHT, padx=(0, 10))
-        ttk.Button(button_frame, text="Cancel", command=on_close).pack(side=tk.RIGHT)
-
-        dialog.protocol("WM_DELETE_WINDOW", on_close)
-        key_entry.focus_set()
-
-        # Apply theme
         self.apply_dialog_theme(dialog)
+        dialog.exec_()
+
+        if dialog in self.dialogs:
+            self.dialogs.remove(dialog)
+
+    def add_field_dialog_changes(self, dialog, key_edit, value_text):
+        key = key_edit.text().strip()
+        value = value_text.toPlainText().strip()
+
+        if not key:
+            QMessageBox.critical(dialog, "Error", "Key cannot be empty.")
+            return
+
+        display_value = limit_text_lines(value, max_lines=12)
+
+        # Create new QTreeWidgetItem and internal mapping
+        item = QTreeWidgetItem(self.ui.metadata_tree, [key, display_value])
+        item.setFlags(item.flags() | Qt.ItemIsEditable) # Make editable
+        item_id = id(item)
+        self.metadata_entries[item_id] = {
+            'key': key,
+            'value': display_value,
+            'full_value': value,
+            'editable': True
+        }
+        self.qt_item_map[item_id] = item
+
+        self.is_modified = True
+        self.ui.update_status("New metadata field added")
+        dialog.accept()
 
     def remove_metadata_field(self):
         # Remove selected metadata field
-        selection = self.ui.metadata_tree.selection()
-        if not selection:
-            messagebox.showwarning("Warning", "Please select a metadata field to remove.")
+        selected_items = self.ui.metadata_tree.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self.ui, "Warning", "Please select a metadata field to remove.")
             return
 
-        item_id = selection[0]
-        entry_data = self.metadata_entries.get(item_id, {})
+        item_to_remove = selected_items[0]
+        # Find the internal ID for this QTreeWidgetItem
+        item_id_to_remove = None
+        for iid, qitem in self.qt_item_map.items():
+            if qitem == item_to_remove:
+                item_id_to_remove = iid
+                break
+
+        if item_id_to_remove is None or item_id_to_remove not in self.metadata_entries:
+            return
+
+        entry_data = self.metadata_entries[item_id_to_remove]
 
         if not entry_data.get('editable', True):
-            messagebox.showinfo("Info", "Cannot remove basic image information fields.")
+            QMessageBox.information(self.ui, "Info", "Cannot remove basic image information fields.")
             return
 
         key = entry_data.get('key', 'Unknown')
-        if messagebox.askyesno("Confirm", f"Remove metadata field '{key}'?"):
-            self.ui.metadata_tree.delete(item_id)
-            del self.metadata_entries[item_id]
+        reply = QMessageBox.question(self.ui, "Confirm", f"Remove metadata field '{key}'?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            # Remove from QTreeWidget
+            root = self.ui.metadata_tree.invisibleRootItem()
+            for i in range(root.childCount()):
+                if root.child(i) == item_to_remove:
+                    root.removeChild(item_to_remove)
+                    break
+            # Remove from internal dictionaries
+            del self.metadata_entries[item_id_to_remove]
+            del self.qt_item_map[item_id_to_remove]
+
             self.is_modified = True
             self.ui.update_status("Metadata field removed")
-            self.ui.adjust_row_heights()
 
     def save_file(self):
         # Save metadata to current file
         if not self.current_file:
-            messagebox.showwarning("Warning", "No file loaded.")
+            QMessageBox.warning(self.ui, "Warning", "No file loaded.")
             return
 
         self.save_metadata_to_file(self.current_file)
@@ -323,13 +341,12 @@ class MetadataHandler:
     def save_as_file(self):
         # Save metadata to new file
         if not self.current_image:
-            messagebox.showwarning("Warning", "No file loaded.")
+            QMessageBox.warning(self.ui, "Warning", "No file loaded.")
             return
 
-        file_path = filedialog.asksaveasfilename(
-            title="Save PNG File As",
-            defaultextension=".png",
-            filetypes=[("PNG files", "*.png"), ("All files", "*.*")]
+        file_path, _ = QFileDialog.getSaveFileName(
+            self.ui, "Save PNG File As", os.path.basename(self.current_file) if self.current_file else "",
+            "PNG files (*.png);;All files (*.*)"
         )
 
         if file_path:
@@ -338,44 +355,61 @@ class MetadataHandler:
     def save_metadata_to_file(self, file_path):
         # Save metadata to specified file
         try:
+            # Create a new PngInfo object
             png_info = PngImagePlugin.PngInfo()
 
             for item_id, entry_data in self.metadata_entries.items():
-                if entry_data['editable'] and entry_data['key'] and entry_data.get('full_value', entry_data['value']):
+                if entry_data['editable'] and entry_data['key'] and entry_data.get('full_value'):
+                    # Basic image info fields are not actual PNG chunks, so don't add them.
+                    # 'full_value' is the original, un-limited text.
                     if entry_data['key'] not in ['Image Width', 'Image Height', 'Image Mode', 'Image Format']:
-                        png_info.add_text(entry_data['key'], entry_data.get('full_value', entry_data['value']))
+                        png_info.add_text(entry_data['key'], entry_data['full_value'])
 
-            self.current_image.save(file_path, "PNG", pnginfo=png_info)
+            # Create a new image object with the original image data to ensure we don't modify the opened one directly
+            # which could lead to issues with file handles or unexpected behavior.
+            temp_image = self.current_image.copy()
 
+            # Save the image with the new PNG info
+            temp_image.save(file_path, "PNG", pnginfo=png_info)
+
+            # Update current file if saved to the same path
             if file_path == self.current_file:
                 self.is_modified = False
+                # Re-load the image to reflect saved changes, especially if metadata changed
+                self.current_image = Image.open(file_path)
+                self.current_image.load()
+
 
             self.ui.update_status(f"Saved: {os.path.basename(file_path)}")
-            messagebox.showinfo("Success", f"File saved successfully:\n{os.path.basename(file_path)}")
+            QMessageBox.information(self.ui, "Success", f"File saved successfully:\n{os.path.basename(file_path)}")
 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to save file:\n{str(e)}")
+            QMessageBox.critical(self.ui, "Error", f"Failed to save file:\n{str(e)}")
 
     def apply_dialog_theme(self, dialog):
         # Apply theme to dialog widgets
-        dialog.configure(bg=THEME[self.ui.theme]["bg"])
-        for widget in dialog.winfo_children():
-            if isinstance(widget, ttk.Frame):
-                widget.configure(style="TFrame")
-                for child in widget.winfo_children():
-                    if isinstance(child, ttk.Label):
-                        child.configure(background=THEME[self.ui.theme]["bg"], foreground=THEME[self.ui.theme]["fg"])
-                    elif isinstance(child, ttk.Button):
-                        child.configure(style="TButton")
-                    elif isinstance(child, ttk.Entry):
-                        child.configure(style="TEntry")
-                    elif isinstance(child, scrolledtext.ScrolledText):
-                        child.configure(bg=THEME[self.ui.theme]["highlight"], fg=THEME[self.ui.theme]["fg"])
+        theme_colors = get_theme_colors(self.ui.theme)
+        dialog.setStyleSheet(f"background-color: {theme_colors['bg']}; color: {theme_colors['fg']};")
+
+        # Recursively apply styles to children
+        for widget in dialog.findChildren(QWidget):
+            if isinstance(widget, QLabel):
+                widget.setStyleSheet(f"color: {theme_colors['fg']};")
+            elif isinstance(widget, QPushButton):
+                widget.setStyleSheet(f"background-color: {theme_colors['highlight']}; color: {theme_colors['fg']}; border: 1px solid {theme_colors['accent']};")
+                # Hover effect
+                widget.setWhatsThis(f"QPushButton:hover {{ background-color: {theme_colors['accent']}; color: {get_theme_colors('light' if self.ui.theme == 'dark' else 'dark')['fg']}; }}")
+                widget.setStyleSheet(widget.styleSheet() + widget.whatsThis())
+            elif isinstance(widget, QLineEdit):
+                widget.setStyleSheet(f"background-color: {theme_colors['highlight']}; color: {theme_colors['fg']}; border: 1px solid {theme_colors['accent']};")
+            elif isinstance(widget, QTextEdit):
+                widget.setStyleSheet(f"background-color: {theme_colors['highlight']}; color: {theme_colors['fg']}; border: 1px solid {theme_colors['accent']};")
+            # You might need to add more specific widget types if they don't inherit styles automatically
 
     def update_dialog_theme(self, theme):
         # Update theme for all open dialogs
         for dialog in self.dialogs[:]:
-            if dialog.winfo_exists():
+            if dialog.isVisible():
                 self.apply_dialog_theme(dialog)
             else:
                 self.dialogs.remove(dialog)

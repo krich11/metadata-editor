@@ -1,60 +1,74 @@
-# PNG Metadata Editor - UI Module
+# PNG Metadata Editor - UI Module (PyQt5)
 # Date: June 13, 2025
-# Time: 09:51 AM CDT
+# Time: 09:51 AM CDT (Updated for PyQt5)
 # Version: 2.0.7
-# Description: Main UI components and layout for the PNG Metadata Editor with dynamic row heights and robust drag-drop
+# Description: Main UI components and layout for the PNG Metadata Editor with dynamic row heights and robust drag-drop using PyQt5
 
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
-from PIL import Image
-import tkinterdnd2 as tkdnd
+from PyQt5.QtWidgets import (
+    QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QPushButton,
+    QMessageBox, QSplitter, QFrame, QSizePolicy, QAction, QFileDialog,
+    QTreeWidget, QTreeWidgetItem, QHeaderView
+)
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QIcon, QFontMetrics, QDragEnterEvent, QDropEvent
+
 from metadata import MetadataHandler
 from image_preview import ImagePreview
-from utils import THEME, apply_theme
+from utils import apply_theme, get_theme_colors # Assuming get_theme_colors is added to utils for PyQt5 styling
 
 
-class PNGMetadataEditorUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("PNG Metadata Editor")
+class PNGMetadataEditorUI(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("PNG Metadata Editor")
         self.base_width = 1000
         self.base_height = 700
-        self.root.geometry(f"{self.base_width}x{self.base_height}")
-        self.root.minsize(800, 500)
+        self.setGeometry(100, 100, self.base_width, self.base_height)
+        self.setMinimumSize(800, 500)
         self.theme = "dark"  # Default theme
+
         self.metadata_handler = MetadataHandler(self)
         self.image_preview = ImagePreview(self)
 
         self.setup_ui()
         self.setup_menu()
-        self.setup_drag_drop()
-        apply_theme(self.root, self.theme)
+        self.apply_initial_theme() # Apply theme after UI setup
+
+        # Enable drag and drop for the main window
+        self.setAcceptDrops(True)
 
     def setup_ui(self):
-        # Main container with paned window for resizable preview
-        self.main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        self.main_paned.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        # Central widget and main layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+
+        # Main splitter for resizable preview
+        self.main_splitter = QSplitter(Qt.Horizontal)
+        main_layout.addWidget(self.main_splitter)
 
         # Left pane for metadata controls
-        self.main_frame = ttk.Frame(self.main_paned, padding=10)
-        self.main_paned.add(self.main_frame, weight=1)
+        left_frame = QFrame()
+        left_layout = QVBoxLayout(left_frame)
+        self.main_splitter.addWidget(left_frame)
 
         # File info section
-        file_frame = ttk.LabelFrame(self.main_frame, text="File Information", padding=5)
-        file_frame.grid(row=0, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0, 10))
-        file_frame.columnconfigure(1, weight=1)
+        file_info_frame = QFrame()
+        file_info_layout = QHBoxLayout(file_info_frame)
+        file_info_frame.setContentsMargins(0,0,0,0) # Adjust margins if needed for a cleaner look
+        left_layout.addWidget(file_info_frame)
 
-        ttk.Label(file_frame, text="File:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
-        self.file_label = ttk.Label(file_frame, text="No file loaded", foreground=THEME[self.theme]["fg_muted"])
-        self.file_label.grid(row=0, column=1, sticky=(tk.W, tk.E))
+        file_info_layout.addWidget(QLabel("File:"))
+        self.file_label = QLabel("No file loaded")
+        self.file_label.setStyleSheet(f"color: {get_theme_colors(self.theme)['fg_muted']};") # Initial muted color
+        file_info_layout.addWidget(self.file_label)
+        file_info_layout.addStretch(1) # Pushes file label to left
 
         # Control buttons
-        button_frame = ttk.Frame(self.main_frame)
-        button_frame.grid(row=1, column=0, columnspan=3, pady=(0, 10))
+        button_layout = QHBoxLayout()
+        left_layout.addLayout(button_layout)
 
-        buttons = [
+        buttons_data = [
             ("Open File", self.metadata_handler.open_file),
             ("Save", self.metadata_handler.save_file),
             ("Save As", self.metadata_handler.save_as_file),
@@ -62,116 +76,159 @@ class PNGMetadataEditorUI:
             ("Remove Field", self.metadata_handler.remove_metadata_field),
             ("Toggle Preview", self.toggle_preview)
         ]
-        for text, command in buttons:
-            ttk.Button(button_frame, text=text, command=command).pack(side=tk.LEFT, padx=(0, 5))
+        for text, command in buttons_data:
+            btn = QPushButton(text)
+            btn.clicked.connect(command)
+            button_layout.addWidget(btn)
 
         # Theme toggle button
-        self.theme_button = ttk.Button(button_frame, text="Toggle Light Mode", command=self.toggle_theme)
-        self.theme_button.pack(side=tk.LEFT, padx=(10, 5))
+        self.theme_button = QPushButton("Toggle Light Mode")
+        self.theme_button.clicked.connect(self.toggle_theme)
+        button_layout.addWidget(self.theme_button)
+        button_layout.addStretch(1) # Pushes buttons to left
 
-        # Metadata table
-        metadata_frame = ttk.LabelFrame(self.main_frame, text="Metadata", padding=5)
-        metadata_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S))
-        metadata_frame.columnconfigure(0, weight=1)
-        metadata_frame.rowconfigure(0, weight=1)
+        # Metadata table (QTreeWidget)
+        metadata_frame = QFrame()
+        metadata_layout = QVBoxLayout(metadata_frame)
+        left_layout.addWidget(metadata_frame)
+        metadata_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        tree_frame = ttk.Frame(metadata_frame)
-        tree_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        tree_frame.columnconfigure(0, weight=1)
-        tree_frame.rowconfigure(0, weight=1)
+        self.metadata_tree = QTreeWidget()
+        self.metadata_tree.setHeaderLabels(['Metadata Key', 'Value'])
+        self.metadata_tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
+        self.metadata_tree.header().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.metadata_tree.setColumnCount(2)
+        self.metadata_tree.setIndentation(0) # Remove indentation for cleaner look
 
-        # Enhanced treeview with dynamic row heights
-        style = ttk.Style()
-        style.configure("Custom.Treeview", rowheight=25)
-        self.metadata_tree = ttk.Treeview(tree_frame, columns=('Key', 'Value'), show='headings', height=20,
-                                          style="Custom.Treeview")
-        self.metadata_tree.heading('Key', text='Metadata Key')
-        self.metadata_tree.heading('Value', text='Value')
-        self.metadata_tree.column('Key', width=250, minwidth=150)
-        self.metadata_tree.column('Value', width=500, minwidth=300)
-
-        # Scrollbars
-        v_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.metadata_tree.yview)
-        h_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=self.metadata_tree.xview)
-        self.metadata_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
-
-        self.metadata_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        v_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
-        h_scrollbar.grid(row=1, column=0, sticky=(tk.W, tk.E))
-
-        self.metadata_tree.bind('<Double-1>', self.metadata_handler.edit_metadata_item)
-        self.metadata_tree.bind('<Configure>', self.adjust_row_heights)
+        self.metadata_tree.itemDoubleClicked.connect(self.metadata_handler.edit_metadata_item)
+        self.metadata_tree.setAlternatingRowColors(True) # For better readability
+        metadata_layout.addWidget(self.metadata_tree)
 
         # Drop zone label
-        self.drop_label = ttk.Label(metadata_frame,
-                                    text="Drag and drop a PNG file here, or use 'Open File' button",
-                                    font=('TkDefaultFont', 12),
-                                    foreground=THEME[self.theme]["fg_muted"],
-                                    anchor='center')
-        self.drop_label.place(relx=0.5, rely=0.5, anchor='center')
+        self.drop_label = QLabel("Drag and drop a PNG file here, or use 'Open File' button")
+        self.drop_label.setAlignment(Qt.AlignCenter)
+        self.drop_label.setStyleSheet(f"color: {get_theme_colors(self.theme)['fg_muted']};")
+        self.drop_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.drop_label.setWordWrap(True) # Allow text to wrap
+        metadata_layout.addWidget(self.drop_label) # Initially add to layout, will hide on file load
 
         # Status bar
-        self.status_var = tk.StringVar(value="Ready - No file loaded")
-        status_bar = ttk.Label(self.main_frame, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
-        status_bar.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(5, 0))
+        self.status_bar = self.statusBar()
+        self.update_status("Ready - No file loaded")
+
+        # Initial splitter sizes (left pane takes most space)
+        self.main_splitter.setSizes([self.width(), 0]) # Image preview starts hidden
 
     def setup_menu(self):
-        # Menu bar
-        menubar = tk.Menu(self.root)
-        self.root.config(menu=menubar)
-
         # File menu
-        file_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="Open", command=self.metadata_handler.open_file)
-        file_menu.add_command(label="Save", command=self.metadata_handler.save_file)
-        file_menu.add_command(label="Save As", command=self.metadata_handler.save_as_file)
-        file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.root.quit)
+        file_menu = self.menuBar().addMenu("&File")
 
-    def setup_drag_drop(self):
-        # Enable drag and drop on main window
-        try:
-            self.root.drop_target_register(tkdnd.DND_FILES)
-            self.root.dnd_bind('<<DragEnter>>', lambda e: print("DragEnter event"))
-            self.root.dnd_bind('<<DragOver>>', lambda e: print("DragOver event"))
-            self.root.dnd_bind('<<Drop>>', self.metadata_handler.handle_drop)
-        except Exception as e:
-            print(f"Drag and drop setup error: {str(e)}")
-            messagebox.showwarning("Warning", "Drag and drop initialization failed. Use 'Open File' button.")
+        open_action = QAction("&Open", self)
+        open_action.setShortcut("Ctrl+O")
+        open_action.triggered.connect(self.metadata_handler.open_file)
+        file_menu.addAction(open_action)
+
+        save_action = QAction("&Save", self)
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self.metadata_handler.save_file)
+        file_menu.addAction(save_action)
+
+        save_as_action = QAction("Save &As...", self)
+        save_as_action.setShortcut("Ctrl+Shift+S")
+        save_as_action.triggered.connect(self.metadata_handler.save_as_file)
+        file_menu.addAction(save_as_action)
+
+        file_menu.addSeparator()
+
+        exit_action = QAction("E&xit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+
+    def apply_initial_theme(self):
+        # Apply the initial theme after UI components are created
+        apply_theme(self, self.theme)
 
     def toggle_theme(self):
         # Toggle between light and dark themes
         self.theme = "light" if self.theme == "dark" else "dark"
-        apply_theme(self.root, self.theme)
-        self.file_label.configure(foreground=THEME[self.theme]["fg_muted"])
-        self.drop_label.configure(foreground=THEME[self.theme]["fg_muted"])
+        apply_theme(self, self.theme)
+
+        # Update specific widget colors that don't get styled by apply_theme directly
+        theme_colors = get_theme_colors(self.theme)
+        self.file_label.setStyleSheet(f"color: {theme_colors['fg_muted']};")
+        self.drop_label.setStyleSheet(f"color: {theme_colors['fg_muted']};")
         self.image_preview.update_theme(self.theme)
-        self.theme_button.configure(text=f"Toggle {'Dark' if self.theme == 'light' else 'Light'} Mode")
+        self.theme_button.setText(f"Toggle {'Dark' if self.theme == 'light' else 'Light'} Mode")
         self.metadata_handler.update_dialog_theme(self.theme)
 
     def toggle_preview(self):
-        # Toggle image preview and resize window
-        self.image_preview.toggle_preview()
-        new_width = self.base_width + (400 if self.image_preview.preview_visible else 0)
-        self.root.geometry(f"{new_width}x{self.base_height}")
-        if self.image_preview.preview_visible and self.metadata_handler.current_image:
-            self.image_preview.update_preview(self.metadata_handler.current_image)
+        # Toggle image preview visibility
+        if self.image_preview.preview_visible:
+            self.image_preview.hide_preview()
+            # Restore left pane to full width
+            self.main_splitter.setSizes([self.width(), 0])
+        else:
+            self.image_preview.show_preview()
+            # Adjust splitter to show preview (approx 70/30 split initially)
+            self.main_splitter.setSizes([int(self.width() * 0.7), int(self.width() * 0.3)])
+            if self.metadata_handler.current_image:
+                self.image_preview.update_preview(self.metadata_handler.current_image)
 
-    def adjust_row_heights(self, event=None):
-        # Adjust row heights based on metadata entries
-        for item in self.metadata_tree.get_children():
-            if item in self.metadata_handler.metadata_entries:
-                entry = self.metadata_handler.metadata_entries[item]
-                key = entry.get('key', '')
-                value = entry.get('value', '')
-                row_height = entry.get('row_height', 25)
-                self.metadata_tree.item(item, tags=('row', f'height_{row_height}'))
-                self.metadata_tree.set(item, column='Value', value=value)  # Refresh display
+    def adjust_row_heights(self):
+        # In PyQt5, row heights are usually handled by the `sizeHint` of a custom delegate
+        # or by setting a fixed height. For dynamic content, a custom delegate is preferred.
+        # For a simpler approach, we can manually adjust as done in Tkinter, but it's less direct.
+        # PyQt's QTreeWidget usually handles this more gracefully.
+        # If content requires more space, you might consider `setWordWrap(True)` on the item's QLabel.
+        # For specific item heights, a custom delegate would be needed.
+        # For now, we'll ensure items are properly displayed.
+        for item_id, entry_data in self.metadata_handler.metadata_entries.items():
+            item = self.metadata_handler.qt_item_map.get(item_id) # Get the QTreeWidgetItem
+            if item:
+                # Re-set text to ensure word wrap calculation if needed
+                item.setText(0, entry_data['key'])
+                item.setText(1, entry_data['value'])
+                # If you need dynamic height, this is where a custom delegate is useful.
+                # For basic wrapping, QTreeWidget often handles it if text is long and column is narrow.
+                # Here, we'll just ensure the text is properly set.
+
+        # Trigger a layout update if necessary
+        self.metadata_tree.resizeColumnToContents(0)
+        self.metadata_tree.resizeColumnToContents(1)
+
 
     def update_status(self, message):
         # Update status bar message
         status = message
         if self.metadata_handler.is_modified:
             status += " (Modified)"
-        self.status_var.set(status)
+        self.status_bar.showMessage(status)
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        # Accept drag if it contains URLs (files)
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent):
+        # Handle dropped files
+        files = [url.toLocalFile() for url in event.mimeData().urls()]
+        if files:
+            self.metadata_handler.handle_drop(files[0]) # Pass the first file
+        event.acceptProposedAction()
+
+    def resizeEvent(self, event):
+        # When main window is resized, ensure splitter adjusts its sizes.
+        # This will distribute space proportionally unless fixed.
+        if self.image_preview.preview_visible:
+            # Re-apply sizes to maintain proportion if preview is visible
+            current_sizes = self.main_splitter.sizes()
+            total_width = sum(current_sizes)
+            if total_width > 0:
+                ratio_left = current_sizes[0] / total_width
+                ratio_right = current_sizes[1] / total_width
+                new_total_width = self.width() # Use the new width of the QMainWindow
+                self.main_splitter.setSizes([int(new_total_width * ratio_left), int(new_total_width * ratio_right)])
+        super().resizeEvent(event)

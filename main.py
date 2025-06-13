@@ -1,40 +1,29 @@
-# PNG Metadata Editor - Main Application
+# PNG Metadata Editor - Main Application (PyQt5)
 # Date: June 13, 2025
-# Time: 09:15 AM CDT
+# Time: 09:15 AM CDT (Updated for PyQt5)
 # Version: 2.0.5
-# Description: Entry point for the PNG Metadata Editor with enhanced UI and image preview
+# Description: Entry point for the PNG Metadata Editor with enhanced UI and image preview using PyQt5
 
 import sys
-from tkinter import messagebox
-import tkinterdnd2 as tkdnd
+from PyQt5.QtWidgets import QApplication, QMessageBox
 from ui import PNGMetadataEditorUI
-from utils import center_window
+# No direct equivalent for 'utils.center_window' needed as PyQt handles geometry similarly
+# No direct equivalent for 'os' environment variable setting for DND, PyQt handles DND natively.
 
 
 def main():
-    # Initialize main window with drag-drop support
+    app = QApplication(sys.argv)
     try:
-        root = tkdnd.TkinterDnD.Tk()
-        app = PNGMetadataEditorUI(root)
-
-        # Set window icon if available
-        try:
-            root.iconbitmap(default='python.ico')
-        except:
-            pass
-
-        # Center window
-        center_window(root, 1000, 700)
-
-        # Start application
-        root.mainloop()
-
-    except ImportError as e:
-        messagebox.showerror("Error",
-                             f"Required packages not installed.\nPlease install: pillow, tkinterdnd2\nError: {e}")
-        sys.exit(1)
+        main_window = PNGMetadataEditorUI()
+        main_window.show()
+        sys.exit(app.exec_())
     except Exception as e:
-        messagebox.showerror("Error", f"Application error: {e}")
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Critical)
+        msg_box.setText("Application Error")
+        msg_box.setInformativeText(f"An unexpected error occurred: {e}")
+        msg_box.setWindowTitle("Error")
+        msg_box.exec_()
         sys.exit(1)
 
 
