@@ -1,7 +1,7 @@
 # PNG Metadata Editor - Utilities
 # Date: June 13, 2025
-# Time: 09:47 AM CDT
-# Version: 2.0.6
+# Time: 09:51 AM CDT
+# Version: 2.0.7
 # Description: Utility functions and constants for the PNG Metadata Editor with enhanced theme support
 
 import tkinter as tk
@@ -66,4 +66,4 @@ def calculate_row_height(root, text):
     lines = text.split('\n')
     num_lines = min(len(lines), 12)  # Cap at 12 lines
     line_height = font_obj.metrics('linespace')
-    return max(line_height * num_lines, 25)  # Ensure minimum height
+    return max(line_height * num_lines + 4, 25)  # Add padding, ensure minimum height

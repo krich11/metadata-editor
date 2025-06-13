@@ -1,7 +1,7 @@
 # PNG Metadata Editor - Metadata Handler
 # Date: June 13, 2025
-# Time: 09:47 AM CDT
-# Version: 2.0.6
+# Time: 09:51 AM CDT
+# Version: 2.0.7
 # Description: Handles metadata loading, editing, and saving for PNG files with dynamic row heights
 
 import tkinter as tk
@@ -24,10 +24,12 @@ class MetadataHandler:
     def handle_drop(self, event):
         # Handle dropped files
         try:
+            print("Drop event triggered")  # Debug log
             files = self.ui.root.tk.splitlist(event.data)
+            print(f"Files received: {files}")  # Debug log
             if files:
                 file_path = files[0].strip()
-                print(f"Drop event received: {file_path}")  # Debug log
+                print(f"Processing file: {file_path}")  # Debug log
                 if file_path.lower().endswith('.png'):
                     self.load_png_file(file_path)
                 else:
@@ -67,6 +69,7 @@ class MetadataHandler:
             self.load_metadata()
             self.is_modified = False
             self.ui.update_status(f"Loaded: {os.path.basename(file_path)}")
+            self.ui.adjust_row_heights()  # Refresh row heights
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load PNG file:\n{str(e)}")
@@ -87,11 +90,14 @@ class MetadataHandler:
         # Add basic info
         for key, value in basic_info.items():
             item_id = self.ui.metadata_tree.insert('', 'end', values=(key, value))
-            self.metadata_entries[item_id] = {'key': key, 'value': value, 'editable': False}
-            self.ui.metadata_tree.item(item_id, tags=('basic',))
-            # Calculate row height for key and value
             row_height = calculate_row_height(self.ui.root, f"{key}\n{value}")
-            self.ui.metadata_tree.item(item_id, tags=('basic', f'height_{row_height}'))
+            self.metadata_entries[item_id] = {
+                'key': key,
+                'value': value,
+                'editable': False,
+                'row_height': row_height
+            }
+            self.ui.metadata_tree.item(item_id, tags=('basic',))
 
         # Add PNG metadata
         if png_info:
@@ -106,21 +112,29 @@ class MetadataHandler:
                 # Limit display to 12 lines
                 display_value = limit_text_lines(display_value, max_lines=12)
                 item_id = self.ui.metadata_tree.insert('', 'end', values=(key, display_value))
-                self.metadata_entries[item_id] = {'key': key, 'value': display_value, 'editable': True,
-                                                  'full_value': str(value)}
-
-                # Calculate row height for key and value
                 row_height = calculate_row_height(self.ui.root, f"{key}\n{display_value}")
-                self.ui.metadata_tree.item(item_id, tags=(f'height_{row_height}',))
+                self.metadata_entries[item_id] = {
+                    'key': key,
+                    'value': display_value,
+                    'editable': True,
+                    'full_value': str(value),
+                    'row_height': row_height
+                }
+                self.ui.metadata_tree.item(item_id, tags=('row',))
 
         # Show message if no metadata
         if not png_info:
             item_id = self.ui.metadata_tree.insert('', 'end', values=('No PNG metadata', 'found in this file'))
-            self.metadata_entries[item_id] = {'key': 'No PNG metadata', 'value': 'found in this file',
-                                              'editable': False}
-            self.ui.metadata_tree.item(item_id, tags=('basic',))
             row_height = calculate_row_height(self.ui.root, "No PNG metadata\nfound in this file")
-            self.ui.metadata_tree.item(item_id, tags=('basic', f'height_{row_height}'))
+            self.metadata_entries[item_id] = {
+                'key': 'No PNG metadata',
+                'value': 'found in this file',
+                'editable': False,
+                'row_height': row_height
+            }
+            self.ui.metadata_tree.item(item_id, tags=('basic',))
+
+        self.ui.adjust_row_heights()  # Apply heights after loading
 
     def edit_metadata_item(self, event):
         # Handle double-click to edit metadata
@@ -181,17 +195,19 @@ class MetadataHandler:
                 return
 
             display_value = limit_text_lines(new_value, max_lines=12)
+            row_height = calculate_row_height(self.ui.root, f"{new_key}\n{display_value}")
             self.ui.metadata_tree.item(item_id, values=(new_key, display_value))
             self.metadata_entries[item_id] = {
                 'key': new_key,
                 'value': display_value,
                 'full_value': new_value,
-                'editable': True
+                'editable': True,
+                'row_height': row_height
             }
-            row_height = calculate_row_height(self.ui.root, f"{new_key}\n{display_value}")
-            self.ui.metadata_tree.item(item_id, tags=(f'height_{row_height}',))
+            self.ui.metadata_tree.item(item_id, tags=('row',))
             self.is_modified = True
             self.ui.update_status("Metadata modified")
+            self.ui.adjust_row_heights()
             self.dialogs.remove(dialog)
             dialog.destroy()
 
@@ -245,17 +261,19 @@ class MetadataHandler:
                 return
 
             display_value = limit_text_lines(value, max_lines=12)
+            row_height = calculate_row_height(self.ui.root, f"{key}\n{display_value}")
             item_id = self.ui.metadata_tree.insert('', 'end', values=(key, display_value))
             self.metadata_entries[item_id] = {
                 'key': key,
                 'value': display_value,
                 'full_value': value,
-                'editable': True
+                'editable': True,
+                'row_height': row_height
             }
-            row_height = calculate_row_height(self.ui.root, f"{key}\n{display_value}")
-            self.ui.metadata_tree.item(item_id, tags=(f'height_{row_height}',))
+            self.ui.metadata_tree.item(item_id, tags=('row',))
             self.is_modified = True
             self.ui.update_status("New metadata field added")
+            self.ui.adjust_row_heights()
             self.dialogs.remove(dialog)
             dialog.destroy()
 
@@ -292,6 +310,7 @@ class MetadataHandler:
             del self.metadata_entries[item_id]
             self.is_modified = True
             self.ui.update_status("Metadata field removed")
+            self.ui.adjust_row_heights()
 
     def save_file(self):
         # Save metadata to current file

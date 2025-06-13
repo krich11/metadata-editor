@@ -1,8 +1,8 @@
 # PNG Metadata Editor - UI Module
 # Date: June 13, 2025
-# Time: 09:47 AM CDT
-# Version: 2.0.6
-# Description: Main UI components and layout for the PNG Metadata Editor with dynamic row heights and drag-drop
+# Time: 09:51 AM CDT
+# Version: 2.0.7
+# Description: Main UI components and layout for the PNG Metadata Editor with dynamic row heights and robust drag-drop
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -100,8 +100,7 @@ class PNGMetadataEditorUI:
         h_scrollbar.grid(row=1, column=0, sticky=(tk.W, tk.E))
 
         self.metadata_tree.bind('<Double-1>', self.metadata_handler.edit_metadata_item)
-        self.metadata_tree.bind('<<TreeviewOpen>>', self.adjust_row_heights)
-        self.metadata_tree.bind('<<TreeviewSelect>>', self.adjust_row_heights)
+        self.metadata_tree.bind('<Configure>', self.adjust_row_heights)
 
         # Drop zone label
         self.drop_label = ttk.Label(metadata_frame,
@@ -131,13 +130,15 @@ class PNGMetadataEditorUI:
         file_menu.add_command(label="Exit", command=self.root.quit)
 
     def setup_drag_drop(self):
-        # Enable drag and drop on main window and metadata frame
-        self.root.drop_target_register(tkdnd.DND_FILES)
-        self.main_frame.drop_target_register(tkdnd.DND_FILES)
-        self.drop_label.drop_target_register(tkdnd.DND_FILES)
-        self.root.dnd_bind('<<Drop>>', self.metadata_handler.handle_drop)
-        self.main_frame.dnd_bind('<<Drop>>', self.metadata_handler.handle_drop)
-        self.drop_label.dnd_bind('<<Drop>>', self.metadata_handler.handle_drop)
+        # Enable drag and drop on main window
+        try:
+            self.root.drop_target_register(tkdnd.DND_FILES)
+            self.root.dnd_bind('<<DragEnter>>', lambda e: print("DragEnter event"))
+            self.root.dnd_bind('<<DragOver>>', lambda e: print("DragOver event"))
+            self.root.dnd_bind('<<Drop>>', self.metadata_handler.handle_drop)
+        except Exception as e:
+            print(f"Drag and drop setup error: {str(e)}")
+            messagebox.showwarning("Warning", "Drag and drop initialization failed. Use 'Open File' button.")
 
     def toggle_theme(self):
         # Toggle between light and dark themes
@@ -158,16 +159,15 @@ class PNGMetadataEditorUI:
             self.image_preview.update_preview(self.metadata_handler.current_image)
 
     def adjust_row_heights(self, event=None):
-        # Adjust row heights based on tags
+        # Adjust row heights based on metadata entries
         for item in self.metadata_tree.get_children():
-            tags = self.metadata_tree.item(item, 'tags')
-            for tag in tags:
-                if tag.startswith('height_'):
-                    try:
-                        height = int(tag.split('_')[1])
-                        self.metadata_tree.item(item, tags=tags, height=height)
-                    except ValueError:
-                        pass
+            if item in self.metadata_handler.metadata_entries:
+                entry = self.metadata_handler.metadata_entries[item]
+                key = entry.get('key', '')
+                value = entry.get('value', '')
+                row_height = entry.get('row_height', 25)
+                self.metadata_tree.item(item, tags=('row', f'height_{row_height}'))
+                self.metadata_tree.set(item, column='Value', value=value)  # Refresh display
 
     def update_status(self, message):
         # Update status bar message
