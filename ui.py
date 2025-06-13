@@ -1,7 +1,7 @@
 # PNG Metadata Editor - UI Module
 # Date: June 13, 2025
-# Time: 09:07 AM CDT
-# Version: 2.0.4
+# Time: 09:15 AM CDT
+# Version: 2.0.5
 # Description: Main UI components and layout for the PNG Metadata Editor with enhanced theme and preview toggle
 
 import tkinter as tk

@@ -1,7 +1,7 @@
 # PNG Metadata Editor - Image Preview Module
 # Date: June 13, 2025
-# Time: 09:07 AM CDT
-# Version: 2.0.4
+# Time: 09:15 AM CDT
+# Version: 2.0.5
 # Description: Handles optional image preview functionality with fixed rendering
 
 import tkinter as tk

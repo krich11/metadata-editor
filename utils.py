@@ -1,7 +1,7 @@
 # PNG Metadata Editor - Utilities
 # Date: June 13, 2025
-# Time: 09:03 AM CDT
-# Version: 2.0.3
+# Time: 09:15 AM CDT
+# Version: 2.0.5
 # Description: Utility functions and constants for the PNG Metadata Editor with enhanced theme support
 
 import tkinter as tk

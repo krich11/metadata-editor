@@ -1,7 +1,7 @@
 # PNG Metadata Editor - Main Application
 # Date: June 13, 2025
-# Time: 08:45 AM CDT
-# Version: 2.0.0
+# Time: 09:15 AM CDT
+# Version: 2.0.5
 # Description: Entry point for the PNG Metadata Editor with enhanced UI and image preview
 
 import sys
